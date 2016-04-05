@@ -5,11 +5,14 @@ if (!process.env.PORT)
 var sqlite3 = require('sqlite3').verbose();
 var db = new sqlite3.Database('chinook.sl3');
 
+var itemsPerPage = 20;
+
 /* calls callback with specified page's artists and artist's details */
 var artists = function(page, artist, details, callback) {
   db.all("SELECT Artist.ArtistId, Name, StarsNo " +
     "FROM Artist, Stars WHERE Artist.ArtistId = Stars.ArtistId " +
-    "ORDER BY Name LIMIT 33 OFFSET ($page - 1) * 33",
+    "ORDER BY Name LIMIT " + itemsPerPage + " OFFSET ($page - 1) *" + itemsPerPage,  /*(najprej) limit 33 - toliko zadetkov pokaze, offset - koliko zadekov preskoci; 
+    tu pokaze 33 zadetkov na stran (najprej)*/
     {$page: page}, function(error, rows) {
       if (error) {
         console.log(error);
@@ -18,7 +21,7 @@ var artists = function(page, artist, details, callback) {
         var result = '<div id="artists">';
         for (var i = 0; i < rows.length; i++) {
           var selected = rows[i].ArtistId == artist;
-          result += '<div id="' + rows[i].ArtistId + '"><span class="numbers">' + (page * 33 + i - 32) + '.</span>' +
+          result += '<div id="' + rows[i].ArtistId + '"><span class="numbers">' + (page * itemsPerPage + i - (itemsPerPage-1)) + '.</span>' +
             '<a href="/artists/' + page + (!selected? '/details/' + rows[i].ArtistId: '') + '#' + rows[i].ArtistId + '">' +
             '<button type="button" class="btn btn-default' + (selected? ' selected': '') + '">' +
             rows[i].Name + '</button></a><span class="stars">';
@@ -93,9 +96,16 @@ var genres = function(artist, callback) {
         console.log(error);
         callback('<strong>Something went wrong!</strong>');
       } else {
-        var result = '<h5>Genres</h5><div id="genres">' + 
-          'No genres for this artist' + 
-          '</div>';
+        var result = '<h5>Genres</h5><div id="genres">'; /* + 
+          'No genres for this artist' + */
+          if (rows.length == 0) {
+            result += 'No genres for this artist';
+          } else {
+            for (var i=0; i < rows.length; i++) {
+              result += (i > 0 ? ' | ' : '') + rows[i].Name; /*if (i>0) {return ' | ';} else {return '';}*/
+            }
+          }
+         result += '</div>';
         callback(result);
       }
   });
@@ -115,14 +125,14 @@ app.get('/artists', function(request, response) {
 });
 
 /* responds with specified page's artists */
-app.get('/artists/:page', function(request, response) {
+app.get('/artists/:page', function(request, response) {  /*sprehajanje po straneh?*/
   artists(request.params.page, -1, '', function(result) {
     response.render('index', {content: result});
   });
 });
 
 /* responds with specified page's artists and artist's details */
-app.get('/artists/:page/details/:artist', function(request, response) {
+app.get('/artists/:page/details/:artist', function(request, response) { /*klice se artists(1,-1, '',callback*/
   albums(request.params.artist, function(albums) {
     playlists(request.params.artist, function(playlists) {
       genres(request.params.artist, function(genres) {
@@ -187,8 +197,14 @@ app.get('/pages', function(request, response) {
       console.log(error);
       response.sendStatus(500);
     } else
-      response.send({pages: Math.ceil(row.Artists / 33)});
+      response.send({pages: Math.ceil(row.Artists / itemsPerPage)});
   });
 });
 
+app.get('/', function(request, response) {
+  response.redirect('/artists/1');
+});
 
+app.listen(process.env.PORT, function() {
+  console.log("Strežnik je pognan!");
+}) 
